@@ -79,15 +79,12 @@ def api_is_current(port: int) -> bool:
 
 
 def choose_backend_port() -> int:
-    if port_open(8000) and api_is_current(8000):
-        return 8000
-    if not port_open(8000):
-        return 8000
-
-    for port in range(8001, 8011):
-        if not port_open(port):
-            return port
-    raise RuntimeError("No free backend port found in 8001-8010.")
+    """Keep the frontend/backend contract stable across restarts."""
+    if port_open(8000) and not api_is_current(8000):
+        raise RuntimeError(
+            "Port 8000 is occupied by another service. Stop that service, then run start-project.py again."
+        )
+    return 8000
 
 
 def spawn(name: str, command: list[str], cwd: Path, env: dict[str, str]) -> None:

@@ -16,8 +16,10 @@ from .models import (
     ProductCreateRequest,
     ProductDraftRequest,
     ProductDraftResponse,
+    ProductSalesItem,
     QaLog,
     ReviewReportData,
+    SalesSummary,
     ScriptSection,
     ScriptType,
     ToolLog,
@@ -447,17 +449,18 @@ def _generate_product_with_openai(payload: ProductDraftRequest) -> ProductCreate
         "stock": payload.stock,
         "imageUrl": payload.imageUrl or "/products/cup.jpg",
         "requirements": [
-            "???????????",
-            "??????????",
-            "????????????????????",
-            "???????????????????????????",
-            "??????? schema ? JSON?",
+            "根据商品名称生成完整、真实可信的商品资料，不要编造不存在的规格参数。",
+            "卖点要具体可感知，避免空泛套话，至少 3 条。",
+            "分类从校园好物、食品饮品、学习办公、母婴用品、个护美妆、数码配件中选择最合适的一个。",
+            "价格、直播价、库存优先采用用户输入值，缺失时给出与品类相符的合理默认。",
+            "合规要求：不得夸大功效、不得承诺治疗效果、不得使用绝对化表述。",
+            "必须严格按照 schema 返回合法 JSON，只输出 JSON。",
         ],
     }
 
     try:
         generated = _request_llm_json(
-            "???????? Agent????????????????????",
+            "你是直播电商商品资料 Agent，负责根据用户录入的商品名称，生成结构化、合规的商品资料，用于直播选品与主播话术生成。",
             prompt,
             "product_draft",
             schema,
@@ -465,7 +468,7 @@ def _generate_product_with_openai(payload: ProductDraftRequest) -> ProductCreate
         if not generated:
             return None
         generated["imageUrl"] = payload.imageUrl or generated.get("imageUrl") or "/products/cup.jpg"
-        generated["imageCredit"] = generated.get("imageCredit") or "AI ??"
+        generated["imageCredit"] = generated.get("imageCredit") or "AI 生成"
         return ProductCreateRequest(**generated)
     except Exception:
         return None
@@ -662,7 +665,7 @@ def answer_danmu(product: Product, danmu: Danmu, profile: UserProfile) -> tuple[
     return answer, logs, qa_log, build_agent_trace(product, danmu, profile, logs), source
 
 
-def generate_review(qa_logs: list[QaLog], products: list[Product]) -> ReviewReportData:
+def generate_review(qa_logs: list[QaLog], products: list[Product], orders: list[Order] | None = None) -> ReviewReportData:
     emotion_summary = {"感兴趣": 0, "犹豫": 0, "质疑": 0, "投诉": 0}
     for item in qa_logs:
         emotion_summary[item.emotion] += 1
@@ -674,6 +677,38 @@ def generate_review(qa_logs: list[QaLog], products: list[Product]) -> ReviewRepo
     ]
 
     low_stock = [product.name for product in products if product.stock < 40]
+
+    # 销售统计
+    order_list = orders or []
+    total_orders = len(order_list)
+    total_quantity = sum(item.quantity for order in order_list for item in order.items)
+    total_amount = sum(order.totalAmount for order in order_list)
+    avg_order_value = round(total_amount / total_orders, 2) if total_orders > 0 else 0.0
+
+    product_sales_map: dict[int, dict] = {}
+    for order in order_list:
+        for item in order.items:
+            if item.productId not in product_sales_map:
+                product_sales_map[item.productId] = {
+                    "productId": item.productId,
+                    "productName": item.productName,
+                    "quantity": 0,
+                    "amount": 0,
+                }
+            product_sales_map[item.productId]["quantity"] += item.quantity
+            product_sales_map[item.productId]["amount"] += item.subtotal
+    product_sales = [
+        ProductSalesItem(**data)
+        for data in sorted(product_sales_map.values(), key=lambda x: x["quantity"], reverse=True)
+    ]
+
+    sales_summary = SalesSummary(
+        totalOrders=total_orders,
+        totalQuantity=total_quantity,
+        totalAmount=total_amount,
+        avgOrderValue=avg_order_value,
+        productSales=product_sales,
+    )
 
     return ReviewReportData(
         highFrequencyQuestions=high_frequency or ["价格、优惠、售后仍需积累样本"],
@@ -689,4 +724,5 @@ def generate_review(qa_logs: list[QaLog], products: list[Product]) -> ReviewRepo
             "每个商品收尾固定补充售后、规格和注意事项",
         ],
         nextProductOrder=[product.name for product in sorted(products, key=lambda item: item.stock, reverse=True)[:5]],
+        salesSummary=sales_summary,
     )

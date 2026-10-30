@@ -216,7 +216,7 @@ def get_orders() -> dict[str, list]:
 
 @app.post("/api/review/generate/", response_model=ReviewReportData)
 def create_review(payload: ReviewRequest) -> ReviewReportData:
-    report = generate_review(payload.qaLogs, load_products())
+    report = generate_review(payload.qaLogs, load_products(), list_orders(limit=None))
     return save_review_report(report)
 
 

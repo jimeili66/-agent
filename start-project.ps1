@@ -41,6 +41,20 @@ function Start-DevScript {
     & $env:ComSpec /d /c $command | Out-Null
 }
 
+function Test-BackendHealth {
+    try {
+        $response = Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/health/" -TimeoutSec 2
+        return $response.status -eq "ok"
+    } catch {
+        return $false
+    }
+}
+
+if ((Test-ListenPort 8000) -and -not (Test-BackendHealth)) {
+    Write-Host "Port 8000 is occupied by another service. Stop it before starting this project." -ForegroundColor Red
+    exit 1
+}
+
 if (-not (Test-ListenPort 8000)) {
     Start-DevScript "Live Agent Backend" $backendScript
 }

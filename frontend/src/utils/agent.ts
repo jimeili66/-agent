@@ -1,6 +1,7 @@
 import type {
   Danmu,
   Emotion,
+  Order,
   Product,
   QaLog,
   ReviewReportData,
@@ -139,7 +140,7 @@ export function answerDanmu(product: Product, danmu: Danmu, profile: UserProfile
   return { answer, logs };
 }
 
-export function generateReview(qaLogs: QaLog[], products: Product[]): ReviewReportData {
+export function generateReview(qaLogs: QaLog[], products: Product[], orders?: Order[]): ReviewReportData {
   const emotionSummary = qaLogs.reduce<Record<Emotion, number>>(
     (acc, item) => {
       acc[item.emotion] += 1;
@@ -160,6 +161,32 @@ export function generateReview(qaLogs: QaLog[], products: Product[]): ReviewRepo
 
   const lowStock = products.filter((product) => product.stock < 40).map((product) => product.name);
 
+  // 销售统计
+  const orderList = orders ?? [];
+  const totalOrders = orderList.length;
+  const totalQuantity = orderList.reduce((sum, order) => sum + order.items.reduce((s, item) => s + item.quantity, 0), 0);
+  const totalAmount = orderList.reduce((sum, order) => sum + order.totalAmount, 0);
+  const avgOrderValue = totalOrders > 0 ? Math.round((totalAmount / totalOrders) * 100) / 100 : 0;
+
+  const productSalesMap = new Map<number, { productId: number; productName: string; quantity: number; amount: number }>();
+  orderList.forEach((order) => {
+    order.items.forEach((item) => {
+      const existing = productSalesMap.get(item.productId);
+      if (existing) {
+        existing.quantity += item.quantity;
+        existing.amount += item.subtotal;
+      } else {
+        productSalesMap.set(item.productId, {
+          productId: item.productId,
+          productName: item.productName,
+          quantity: item.quantity,
+          amount: item.subtotal
+        });
+      }
+    });
+  });
+  const productSales = Array.from(productSalesMap.values()).sort((a, b) => b.quantity - a.quantity);
+
   return {
     highFrequencyQuestions: highFrequencyQuestions.length ? highFrequencyQuestions : ["价格、优惠、售后仍需积累样本"],
     emotionSummary,
@@ -176,6 +203,13 @@ export function generateReview(qaLogs: QaLog[], products: Product[]): ReviewRepo
     nextProductOrder: [...products]
       .sort((a, b) => b.stock - a.stock)
       .slice(0, 5)
-      .map((product) => product.name)
+      .map((product) => product.name),
+    salesSummary: orders ? {
+      totalOrders,
+      totalQuantity,
+      totalAmount,
+      avgOrderValue,
+      productSales
+    } : null
   };
 }

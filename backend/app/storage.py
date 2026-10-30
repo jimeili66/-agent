@@ -108,12 +108,11 @@ def save_order(order: Order) -> Order:
         next_id = (_orders[0].id + 1) if _orders else 1
         saved = order.model_copy(update={"id": next_id})
         _orders.insert(0, saved)
-        del _orders[50:]
         return saved
     return _repository.save_order(order)
 
 
-def list_orders(limit: int = 50) -> list[Order]:
+def list_orders(limit: int | None = 50) -> list[Order]:
     if _repository is None:
         return _orders[:limit]
     return _repository.list_orders(limit)
