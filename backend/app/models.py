@@ -224,6 +224,7 @@ class DanmuAnswerResponse(BaseModel):
 
 class ReviewRequest(BaseModel):
     qaLogs: list[QaLog]
+    sessionStartedAt: str | None = None  # 场次起点（YYYY-MM-DD HH:MM:SS），复盘只统计之后的订单
 
 
 class QaLogsResponse(BaseModel):

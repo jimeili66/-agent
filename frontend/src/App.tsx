@@ -112,6 +112,12 @@ const adminPages: Array<{
   { page: "settings", path: "/admin/settings", label: "设置", description: "接口与重置", icon: <Wrench size={20} /> }
 ];
 
+function formatSessionTime(date: Date): string {
+  // 与后端订单 createdAt 格式（YYYY-MM-DD HH:MM:SS）保持一致，便于字符串比较
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
 function getAdminPageFromPath(): AdminPage {
   const slug = window.location.pathname.split("/").filter(Boolean)[1];
   const matchedPage = adminPages.find((item) => item.page === slug);
@@ -177,6 +183,7 @@ function App() {
   const [danmuItems, setDanmuItems] = useState(fallbackDanmuList);
   const [liveDanmuItems, setLiveDanmuItems] = useState<Danmu[]>(fallbackDanmuList.slice(0, 8));
   const [isLive, setIsLive] = useState(false);
+  const [sessionStartedAt, setSessionStartedAt] = useState(() => formatSessionTime(new Date()));
   const [activeProductId, setActiveProductId] = useState(fallbackProducts[0].id);
   const [productSearch, setProductSearch] = useState("");
   const [profile, setProfile] = useState<UserProfile>("学生党");
@@ -384,12 +391,13 @@ function App() {
   useEffect(() => {
     let mounted = true;
     const timer = window.setInterval(() => {
-      Promise.all([fetchDanmu(), fetchOrders()])
-        .then(([remoteDanmu, remoteOrders]) => {
+      Promise.all([fetchDanmu(), fetchOrders(), fetchQaLogs()])
+        .then(([remoteDanmu, remoteOrders, remoteQaLogs]) => {
           if (!mounted) return;
           const uniqueRemoteDanmu = uniqueDanmuItems(remoteDanmu);
           setDanmuItems(uniqueRemoteDanmu);
           setOrders(remoteOrders.slice(0, 8));
+          setQaLogs(remoteQaLogs.slice(0, 20));
           setLiveDanmuItems((current) => (isLive ? uniqueRemoteDanmu.slice(0, Math.max(current.length, 8)) : current));
         })
         .catch(() => {
@@ -476,6 +484,7 @@ function App() {
 
   async function handleStartSimulation() {
     setIsLive(true);
+    setSessionStartedAt(formatSessionTime(new Date()));
     void startCamera();
     setScriptType("开场");
     setLiveDanmuItems(danmuItems.slice(0, 8));
@@ -805,18 +814,26 @@ function App() {
     const localReview = generateReview(qaLogs, products);
     setReview(localReview);
     try {
-      setReview(await requestReview(qaLogs));
+      setReview(await requestReview(qaLogs, sessionStartedAt));
     } catch {
       setApiNotice("复盘接口暂不可用，已使用本地复盘结果。");
       // Keep local review if the API request fails.
     }
   }
 
+  // 进入复盘报告页时自动生成最新复盘，无需手动点击「生成复盘」
+  useEffect(() => {
+    if (activePage === "review") {
+      void handleReview();
+    }
+  }, [activePage]);
+
   function handleReset() {
     setQaLogs([]);
     setToolLogs([]);
     setReview(null);
     setIsLive(false);
+    setSessionStartedAt(formatSessionTime(new Date()));
     stopCamera();
     setLiveDanmuItems(danmuItems.slice(0, 8));
     setActiveDanmu(danmuItems[0] ?? fallbackDanmuList[0]);

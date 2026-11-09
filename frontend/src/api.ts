@@ -130,10 +130,10 @@ export function fetchOrders(): Promise<Order[]> {
   return requestJson<{ items: Order[] }>("/orders/").then((data) => data.items);
 }
 
-export function requestReview(qaLogs: QaLog[]): Promise<ReviewReportData> {
+export function requestReview(qaLogs: QaLog[], sessionStartedAt?: string): Promise<ReviewReportData> {
   return requestJson<ReviewReportData>("/review/generate/", {
     method: "POST",
-    body: JSON.stringify({ qaLogs })
+    body: JSON.stringify({ qaLogs, sessionStartedAt })
   });
 }
 
