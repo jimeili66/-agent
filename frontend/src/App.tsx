@@ -3,15 +3,17 @@ import {
   Bot,
   CheckCircle2,
   ChevronRight,
-  Eye,
   Headphones,
   LogOut,
+  MessagesSquare,
   Mic2,
+  MessageCircle,
   PackageCheck,
   Play,
   Radio,
   RefreshCw,
   Search,
+  ShoppingBag,
   ShieldCheck,
   Square,
   TrendingUp,
@@ -58,6 +60,7 @@ import type {
 } from "./types";
 import { answerDanmu, calculateDiscount, generateReview, generateScript } from "./utils/agent";
 import { LIVE_CAMERA_CHANNEL, LIVE_CAMERA_FRAME_KEY, type LiveCameraPayload } from "./utils/liveCameraSync";
+import { LIVE_PRODUCT_CHANNEL, saveLiveProductId } from "./utils/liveProductSync";
 import { DEFAULT_ONLINE_PRODUCT_IMAGE, resolveProductImageUrl } from "./utils/productImages";
 
 type ComplianceState = "通过" | "注意" | "风险";
@@ -101,15 +104,14 @@ const adminPages: Array<{
   page: AdminPage;
   path: string;
   label: string;
-  description: string;
   icon: ReactNode;
 }> = [
-  { page: "dashboard", path: "/admin/dashboard", label: "仪表盘", description: "全局态势", icon: <BarChart3 size={20} /> },
-  { page: "products", path: "/admin/products", label: "商品库", description: "货盘与录入", icon: <PackageCheck size={20} /> },
-  { page: "live", path: "/admin/live", label: "直播模拟", description: "话术与弹幕", icon: <Radio size={20} /> },
-  { page: "agents", path: "/admin/agents", label: "Agent 协作", description: "分析与日志", icon: <Bot size={20} /> },
-  { page: "review", path: "/admin/review", label: "复盘报告", description: "指标与建议", icon: <TrendingUp size={20} /> },
-  { page: "settings", path: "/admin/settings", label: "设置", description: "接口与重置", icon: <Wrench size={20} /> }
+  { page: "dashboard", path: "/admin/dashboard", label: "仪表盘", icon: <BarChart3 size={20} /> },
+  { page: "products", path: "/admin/products", label: "商品库", icon: <PackageCheck size={20} /> },
+  { page: "live", path: "/admin/live", label: "直播管理", icon: <Radio size={20} /> },
+  { page: "agents", path: "/admin/agents", label: "Agent 协作", icon: <Bot size={20} /> },
+  { page: "review", path: "/admin/review", label: "复盘报告", icon: <TrendingUp size={20} /> },
+  { page: "settings", path: "/admin/settings", label: "设置", icon: <Wrench size={20} /> }
 ];
 
 function formatSessionTime(date: Date): string {
@@ -216,6 +218,23 @@ function App() {
   const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
   const cameraBroadcastRef = useRef<BroadcastChannel | null>(null);
+  const productBroadcastRef = useRef<BroadcastChannel | null>(null);
+
+  function getProductBroadcastChannel() {
+    if (!("BroadcastChannel" in window)) {
+      return null;
+    }
+    if (!productBroadcastRef.current) {
+      productBroadcastRef.current = new BroadcastChannel(LIVE_PRODUCT_CHANNEL);
+    }
+    return productBroadcastRef.current;
+  }
+
+  // 主推商品变化时同步到用户端（localStorage 持久化 + BroadcastChannel 实时推送）
+  useEffect(() => {
+    saveLiveProductId(activeProductId, getProductBroadcastChannel());
+  }, [activeProductId]);
+
 
   useEffect(() => {
     const token = localStorage.getItem(AUTH_TOKEN_KEY);
@@ -491,7 +510,7 @@ function App() {
     setScript(scriptLoadingText);
     setActiveDanmu(danmuItems[0] ?? fallbackDanmuList[0]);
     setAgentTrace(buildLocalAgentTrace(danmuItems[0] ?? fallbackDanmuList[0], activeProduct.name, profile));
-    setAgentReply("直播模拟已开始。Agent 正在监听弹幕、生成主播话术，并准备记录工具调用与合规审查结果。");
+    setAgentReply("直播已开始。Agent 正在监听弹幕、生成主播话术，并准备记录工具调用与合规审查结果。");
     setAnalysisState("正在分析");
     setReview(null);
     setScriptPulse(true);
@@ -534,7 +553,7 @@ function App() {
       setCameraState("on");
     } catch {
       setCameraState("blocked");
-      setApiNotice("摄像头权限未开启，直播模拟会继续运行；请在浏览器地址栏允许摄像头后重新点击开始模拟。");
+      setApiNotice("摄像头权限未开启。请允许摄像头访问，然后结束直播并重新开始。");
     }
   }
 
@@ -860,13 +879,9 @@ function App() {
     <main className={`dashboard-layout admin-orch-layout admin-page-${activePage}`}>
       <header className="app-header">
         <div className="system-title">
-          <span className="brand-mark">
-            <Radio size={22} />
-          </span>
-          <div>
-            <h1>直播电商 Agent 工作台</h1>
-            <p>当前直播场次：校园好物专场 · 第 1 场 · {isLive ? "直播中" : "待开始"}</p>
-          </div>
+          <span className="header-location">运营工作台</span>
+          <ChevronRight size={14} aria-hidden="true" />
+          <h1>{adminPages.find((item) => item.page === activePage)?.label ?? "仪表盘"}</h1>
         </div>
 
         <div className="header-controls">
@@ -890,7 +905,7 @@ function App() {
           ) : (
             <button className="secondary-action" type="button" onClick={handleStartSimulation}>
               <Play size={17} />
-              开始模拟
+              开始直播
             </button>
           )}
           {activePage === "review" ? (
@@ -911,77 +926,78 @@ function App() {
       <div className="workspace-shell">
         <aside className="sidebar">
           <div className="admin-nav-brand">
-            <strong>AgentOrch</strong>
-            <span>实时运营 V2.4</span>
-          </div>
-          <button
-            className="primary-action admin-new-session"
-            type="button"
-            onClick={(event) => {
-              handleAdminNavigate("live", event);
-              void handleStartSimulation();
-            }}
-          >
-            <Play size={16} />
-            新建模拟
-          </button>
-          <section className="live-status-panel">
-            <PanelTitle icon={<Radio size={17} />} title="直播状态" note="Live" />
-            <div className="status-metrics">
-              <div>
-                <span>当前商品</span>
-                <strong>{activeProduct.name}</strong>
-              </div>
-              <div>
-                <span>已处理弹幕</span>
-                <strong>{qaLogs.length}</strong>
-              </div>
-              <div>
-                <span>工具调用</span>
-                <strong>{toolLogs.length}</strong>
-              </div>
+            <span className="studio-mark" aria-hidden="true"><Radio size={19} /></span>
+            <div>
+              <strong>直播工作台</strong>
+              <span>电商运营 Agent</span>
             </div>
-            <StatusBadge tone={isLive ? "green" : "gray"}>{isLive ? "直播中" : "待开始"}</StatusBadge>
-          </section>
+          </div>
 
-          <div className="sidebar-section">
-            <PanelTitle icon={<Eye size={17} />} title="模块导航" note="Sidebar" />
+          <nav className="sidebar-section" aria-label="模块导航">
+            <p className="sidebar-caption">工作空间</p>
             {adminPages.map((item) => (
               <a
                 key={item.page}
                 className={activePage === item.page ? "nav-item active" : "nav-item"}
+                aria-current={activePage === item.page ? "page" : undefined}
                 href={item.path}
                 onClick={(event) => handleAdminNavigate(item.page, event)}
               >
                 {item.icon}
                 <span>{item.label}</span>
-                <small>{item.description}</small>
-                <ChevronRight size={14} />
               </a>
             ))}
-          </div>
+          </nav>
+
+          <section className="sidebar-session" aria-label="当前直播场次">
+            <div>
+              <span>当前场次</span>
+              <StatusBadge tone={isLive ? "green" : "gray"}>{isLive ? "直播中" : "待开始"}</StatusBadge>
+            </div>
+            <strong>校园好物专场</strong>
+            <p>第 1 场 · {toolLogs.length} 次工具调用</p>
+          </section>
         </aside>
 
         <section className="main-workspace">
           <section className="admin-overview admin-view admin-view-dashboard">
-            <article className="compact-card overview-hero">
-              <PanelTitle icon={<BarChart3 size={18} />} title="仪表盘总览" note="Dashboard" />
-              <div className="overview-grid">
-                <KpiCard label="本场商品" value={`${products.length}`} tone="blue" />
-                <KpiCard label="弹幕问答" value={`${qaLogs.length}`} tone="green" />
-                <KpiCard label="用户下单" value={`${orders.length}`} tone="orange" />
-                <KpiCard label="合规风险" value={`${qaLogs.filter((item) => item.category === "异常合规").length}`} tone="red" />
+            <article className="overview-hero">
+              <div className="overview-intro">
+                <div className="overview-label">
+                  <Radio size={16} aria-hidden="true" />
+                  第 1 场直播
+                  <StatusBadge tone={isLive ? "green" : "gray"}>{isLive ? "直播中" : "待开始"}</StatusBadge>
+                </div>
+                <h2>校园好物专场</h2>
+                <p>查看本场运营数据，进入直播管理准备话术、处理弹幕与跟进订单。</p>
+                <div className="overview-actions">
+                  <button className="primary-action" type="button" onClick={(event) => handleAdminNavigate("live", event)}>
+                    <Radio size={17} aria-hidden="true" /> 进入直播管理
+                  </button>
+                  <button className="secondary-action" type="button" onClick={(event) => handleAdminNavigate("products", event)}>
+                    管理商品
+                  </button>
+                </div>
               </div>
-              <div className="overview-actions">
-                <button className="secondary-action" type="button" onClick={(event) => handleAdminNavigate("products", event)}>
-                  管理商品
-                </button>
-                <button className="primary-action" type="button" onClick={(event) => handleAdminNavigate("live", event)}>
-                  <Radio size={17} />
-                  进入直播模拟
-                </button>
+              <div className="overview-feature">
+                <img src={activeProduct.imageUrl} alt={activeProduct.imageAlt} />
+                <div>
+                  <span>本场主推</span>
+                  <strong>{activeProduct.name}</strong>
+                  <p>¥{activeProduct.livePrice} <span>库存 {activeProduct.stock} 件</span></p>
+                </div>
               </div>
             </article>
+            <div className="overview-section-title">
+              <h2>本场概况</h2>
+              <span>随直播间数据更新</span>
+            </div>
+            <div className="overview-grid">
+              <KpiCard label="本场商品" value={`${products.length}`} tone="blue" icon={<PackageCheck size={18} />} />
+              <KpiCard label="弹幕问答" value={`${qaLogs.length}`} tone="green" icon={<MessageCircle size={18} />} />
+              <KpiCard label="用户下单" value={`${orders.length}`} tone="orange" icon={<ShoppingBag size={18} />} />
+              <KpiCard label="合规风险" value={`${qaLogs.filter((item) => item.category === "异常合规").length}`} tone="red" icon={<ShieldCheck size={18} />} />
+            </div>
           </section>
 
           <section className="current-product data-panel admin-view admin-view-live">
@@ -994,8 +1010,8 @@ function App() {
                   <strong>{cameraState === "starting" ? "正在打开摄像头" : "主播摄像头"}</strong>
                   <span>
                     {cameraState === "blocked"
-                      ? "请在浏览器地址栏允许摄像头权限后，重新点击开始模拟。"
-                      : "点击开始模拟后，这里会显示电脑摄像头画面。"}
+                      ? "请在浏览器地址栏允许摄像头权限后，重新点击开始直播。"
+                      : "点击开始直播后，这里会显示电脑摄像头画面。"}
                   </span>
                 </div>
               )}
@@ -1053,14 +1069,14 @@ function App() {
             </div>
             <div className="product-library-summary">
               <div>
-                <span>Total products</span>
+                <span>商品总数</span>
                 <strong>{products.length}</strong>
               </div>
               <div>
-                <span>Active scripts</span>
+                <span>话术分段</span>
                 <strong>{scriptSections.length}</strong>
               </div>
-              <p>选择商品后会同步到直播模拟、主播话术、弹幕问答和复盘报告。</p>
+              <p>选择商品后会同步到直播管理、主播话术、弹幕问答和复盘报告。</p>
             </div>
             {productFormOpen ? (
               <form className="product-entry-form" onSubmit={handleProductSubmit}>
@@ -1207,25 +1223,25 @@ function App() {
                     <div>
                       <div className="library-product-title">
                         <strong>{product.name}</strong>
-                        <StatusBadge tone={product.stock > 0 ? "green" : "gray"}>{product.stock > 0 ? "Live" : "Empty"}</StatusBadge>
+                        <StatusBadge tone={product.stock > 0 ? "green" : "gray"}>{product.stock > 0 ? "在售" : "缺货"}</StatusBadge>
                       </div>
                       <span className="library-product-price">¥ {product.livePrice}.00</span>
                       <small>SKU: PR-{String(product.id).padStart(4, "0")}</small>
                     </div>
                   </button>
                   <div className="library-product-facts">
-                    <span>USP</span>
+                    <span>卖点</span>
                     <p>{product.sellingPoints.slice(0, 3).join("，")}</p>
-                    <span>Rule</span>
+                    <span>优惠规则</span>
                     <p className="rule-text">{product.promotionRule}</p>
-                    <span>Stock</span>
-                    <p className="stock-text">{product.stock} 现货</p>
+                    <span>库存</span>
+                    <p className="stock-text">剩余库存 {product.stock} 件</p>
                   </div>
                   <div className="library-product-footer">
-                    <span>{product.id === activeProduct.id ? "当前讲解商品" : "Script Ready"}</span>
+                    <span>{product.id === activeProduct.id ? "当前讲解商品" : "话术已就绪"}</span>
                     <div>
                       <button type="button" onClick={() => handleProductChange(product.id)}>
-                        Gen Script <ChevronRight size={17} />
+                        生成话术 <ChevronRight size={17} />
                       </button>
                       <button type="button" onClick={() => handleProductDelete(product.id)} title={`删除 ${product.name}`}>
                         <Trash2 size={15} />
@@ -1331,6 +1347,28 @@ function App() {
             </div>
           </section>
 
+          <section className="compact-card qa-reply-panel admin-view admin-view-live">
+            <PanelTitle icon={<MessagesSquare size={17} />} title="AI 回复话术" note={`${qaLogs.length} 条`} />
+            <div className="qa-reply-feed">
+              {qaLogs.length === 0 ? (
+                <EmptyState text="用户端发起提问后，AI 发给用户的回复会实时显示在这里。" />
+              ) : (
+                qaLogs.slice(0, 12).map((log) => (
+                  <article key={log.id} className="qa-reply-item">
+                    <div className="qa-reply-question">
+                      <StatusBadge tone={emotionTone(log.emotion)}>{log.emotion}</StatusBadge>
+                      <strong>{log.question}</strong>
+                    </div>
+                    <p>{log.answer}</p>
+                    <small>
+                      {log.category} · {log.productName}
+                    </small>
+                  </article>
+                ))
+              )}
+            </div>
+          </section>
+
           <section className={`risk-alert risk-${complianceState} rail-panel-agents`}>
             <PanelTitle icon={<ShieldCheck size={17} />} title="合规审查" note={complianceState} />
             <p>{complianceCopy(complianceState, activeProduct.notes)}</p>
@@ -1338,7 +1376,7 @@ function App() {
 
           {apiNotice ? (
             <section className="risk-alert risk-注意 api-notice-panel">
-              <PanelTitle icon={<ShieldCheck size={17} />} title="接口状态" note="已兜底" />
+              <PanelTitle icon={<ShieldCheck size={17} />} title="接口状态" note="API" />
               <p>{apiNotice}</p>
             </section>
           ) : null}
@@ -1347,7 +1385,7 @@ function App() {
             <PanelTitle icon={<PackageCheck size={17} />} title="实时订单" note={`${orders.length} 单`} />
             <div className="order-feed">
               {orders.length === 0 ? (
-                <EmptyState text="用户端模拟下单后，这里会实时显示订单金额、商品和用户画像。" />
+                <EmptyState text="用户提交订单后，这里会显示订单金额、商品和用户画像。" />
               ) : (
                 orders.map((order) => (
                   <article key={order.id} className="order-row">
@@ -1411,7 +1449,7 @@ function App() {
         </div>
         <div className="settings-actions">
           <button className="secondary-action" type="button" onClick={(event) => handleAdminNavigate("live", event)}>
-            进入直播模拟
+            进入直播管理
           </button>
           <button className="primary-action" type="button" onClick={handleReset}>
             <RefreshCw size={17} />
@@ -1470,10 +1508,11 @@ function StatusBadge({ tone, children }: { tone: BadgeTone; children: ReactNode 
   return <span className={`status-badge badge-${tone}`}>{children}</span>;
 }
 
-function KpiCard({ label, value, tone }: { label: string; value: string; tone: "green" | "orange" | "red" | "blue" }) {
+function KpiCard({ label, value, tone, icon }: { label: string; value: string; icon?: ReactNode; tone: "green" | "orange" | "red" | "blue" }) {
   return (
     <article className={`kpi-card kpi-${tone}`}>
       <span>{label}</span>
+      {icon ? <i className="overview-kpi-icon" aria-hidden="true">{icon}</i> : null}
       <strong>{value}</strong>
     </article>
   );

@@ -1,9 +1,9 @@
 import {
   Bot,
   CheckCircle2,
-  ChevronRight,
   MessageCircle,
   Package,
+  Plus,
   Radio,
   ReceiptText,
   Send,
@@ -15,9 +15,10 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createOrder, fetchProducts, requestDanmuAnswer } from "./api";
 import { products as fallbackProducts } from "./data/products";
+import { LIVE_PRODUCT_CHANNEL, LIVE_PRODUCT_KEY, readLiveProductId } from "./utils/liveProductSync";
 import type { Danmu, DanmuCategory, Emotion, Product, UserProfile } from "./types";
 import { LIVE_CAMERA_CHANNEL, readLiveCameraFrame, type LiveCameraPayload } from "./utils/liveCameraSync";
-import { resolveProductImageUrl } from "./utils/productImages";
+import { isCatalogProductImage, resolveProductImageUrl } from "./utils/productImages";
 
 type CartItem = {
   product: Product;
@@ -39,6 +40,7 @@ const profiles: UserProfile[] = ["学生党", "宝妈", "精致白领"];
 function UserApp() {
   const [products, setProducts] = useState<Product[]>(() => fallbackProducts.map(enhanceProductImage));
   const [activeProductId, setActiveProductId] = useState(fallbackProducts[0]?.id ?? 1);
+  const [liveProductId, setLiveProductId] = useState<number | null>(() => readLiveProductId());
   const [profile, setProfile] = useState<UserProfile>("学生党");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [question, setQuestion] = useState("");
@@ -47,6 +49,7 @@ function UserApp() {
   const [notice, setNotice] = useState("");
   const [liveCameraFrame, setLiveCameraFrame] = useState(() => readLiveCameraFrame());
   const isAskingRef = useRef(false);
+  const chatStreamRef = useRef<HTMLDivElement | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 1,
@@ -54,6 +57,10 @@ function UserApp() {
       text: "欢迎来到校园好物直播间。你可以直接问价格、优惠、库存、适用人群或售后，我会按当前商品帮你回答。"
     }
   ]);
+
+  useEffect(() => {
+    chatStreamRef.current?.scrollTo({ top: chatStreamRef.current.scrollHeight });
+  }, [messages]);
 
   useEffect(() => {
     let mounted = true;
@@ -99,6 +106,35 @@ function UserApp() {
     return () => window.clearInterval(timer);
   }, []);
 
+  // 监听主播端切换讲解商品（BroadcastChannel 实时推送 + storage 事件兜底）
+  useEffect(() => {
+    if (!("BroadcastChannel" in window)) {
+      return undefined;
+    }
+    const channel = new BroadcastChannel(LIVE_PRODUCT_CHANNEL);
+    channel.onmessage = (event: MessageEvent<{ type?: string; productId?: number }>) => {
+      if (event.data?.type === "active-product" && Number.isFinite(event.data.productId)) {
+        setLiveProductId(Number(event.data.productId));
+      }
+    };
+    return () => channel.close();
+  }, []);
+
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === LIVE_PRODUCT_KEY) {
+        setLiveProductId(readLiveProductId());
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  const liveProduct = useMemo(
+    () => products.find((product) => product.id === liveProductId) ?? products[0],
+    [liveProductId, products]
+  );
+
   const activeProduct = useMemo(
     () => products.find((product) => product.id === activeProductId) ?? products[0],
     [activeProductId, products]
@@ -123,12 +159,16 @@ function UserApp() {
   }
 
   function changeQuantity(productId: number, delta: number) {
+    const target = cart.find((item) => item.product.id === productId);
+    if (target && target.quantity === 1 && delta < 0) {
+      removeFromCart(productId);
+      setNotice(`已从购物车移除：${target.product.name}`);
+      return;
+    }
     setCart((current) =>
-      current
-        .map((item) =>
-          item.product.id === productId ? { ...item, quantity: Math.max(1, item.quantity + delta) } : item
-        )
-        .filter((item) => item.quantity > 0)
+      current.map((item) =>
+        item.product.id === productId ? { ...item, quantity: Math.max(1, item.quantity + delta) } : item
+      )
     );
   }
 
@@ -191,10 +231,10 @@ function UserApp() {
         profile,
         items: cart.map((item) => ({ productId: item.product.id, quantity: item.quantity }))
       });
-      setNotice(`模拟下单成功：订单 #${order.id}，${cart.length} 种商品，合计 ¥${order.totalAmount}。`);
+      setNotice(`订单提交成功：订单 #${order.id}，${cart.length} 种商品，合计 ¥${order.totalAmount}。`);
       setCart([]);
     } catch {
-      setNotice("订单接口暂不可用，管理端暂时无法看到这笔下单。");
+      setNotice("订单提交失败，请稍后重试。");
     } finally {
       setIsSubmittingOrder(false);
     }
@@ -221,69 +261,110 @@ function UserApp() {
           </span>
           <div>
             <strong>校园好物直播间</strong>
-            <p>模拟直播中 · Agent 在线答疑</p>
+            <p>{liveCameraFrame ? "直播中 · Agent 在线答疑" : "Agent 在线答疑"}</p>
           </div>
         </div>
-        <nav>
-          <a href="/user" className="active">
-            用户端
-          </a>
-        </nav>
+        <a className="room-cart-link" href="#shopping-cart">
+          <ShoppingBag size={17} aria-hidden="true" />
+          购物车 <span>{cart.length}</span>
+        </a>
       </header>
 
       <section className="user-live-shell">
-        <section className="live-stage">
-          <div className="live-video">
-            <img src={liveCameraFrame || activeProduct.imageUrl} alt={liveCameraFrame ? "主播摄像头实时画面" : activeProduct.imageAlt} />
-            <div className="live-overlay top">
-              <span className="live-dot" />
-              {liveCameraFrame ? "主播直播中" : "正在讲解"}
+        <div className="user-main-col">
+          <section className="live-stage">
+            <div className="live-video">
+              <img src={liveCameraFrame || liveProduct.imageUrl} alt={liveCameraFrame ? "主播摄像头实时画面" : liveProduct.imageAlt} />
+              <div className="live-overlay top">
+                {liveCameraFrame ? <span className="live-dot" /> : <Package size={14} aria-hidden="true" />}
+                {liveCameraFrame ? "主播直播中" : isCatalogProductImage(liveProduct.imageUrl) ? "商品示意图" : "当前商品"}
+              </div>
+              <div className="live-overlay bottom">
+                <strong>{liveProduct.name}</strong>
+              </div>
             </div>
-            <div className="live-overlay bottom">
-              <strong>{activeProduct.name}</strong>
-              <span>库存 {activeProduct.stock} 件</span>
-            </div>
-          </div>
 
-          <div className="live-product-card">
-            <p>{activeProduct.category}</p>
-            <h1>{activeProduct.name}</h1>
-            <div className="user-selling-points">
-              {activeProduct.sellingPoints.map((point) => (
-                <span key={point}>{point}</span>
-              ))}
-            </div>
-            <div className="user-price-row">
-              <div>
-                <span>直播价</span>
-                <strong>¥{activeProduct.livePrice}</strong>
+            <div className="live-product-card live-teaching-card">
+              <p className="live-now-line">
+                <span className="live-dot" aria-hidden="true" />
+                主播正在讲解 · {liveProduct.category}
+              </p>
+              <h1>{liveProduct.name}</h1>
+              <div className="user-price-row">
+                <div>
+                  <span>直播价</span>
+                  <strong>¥{liveProduct.livePrice}</strong>
+                </div>
+                <div>
+                  <span>原价</span>
+                  <del>¥{liveProduct.price}</del>
+                </div>
+                <div>
+                  <span>两件预估</span>
+                  <strong>¥{estimatePrice(liveProduct, 2)}</strong>
+                </div>
               </div>
-              <div>
-                <span>原价</span>
-                <del>¥{activeProduct.price}</del>
+              <div className="promotion-strip">
+                <Sparkles size={16} />
+                {liveProduct.promotionRule}
               </div>
-              <div>
-                <span>两件预估</span>
-                <strong>¥{estimatePrice(activeProduct, 2)}</strong>
+              <div className="user-actions">
+                <button className="buy-action" type="button" onClick={() => addToCart(liveProduct)}>
+                  <ShoppingBag size={18} />
+                  加入购物车
+                </button>
+                <button className="ghost-action" type="button" onClick={() => askAgent("这个适合我吗？")}>
+                  <MessageCircle size={18} />
+                  问问 Agent
+                </button>
               </div>
             </div>
-            <div className="promotion-strip">
-              <Sparkles size={16} />
-              {activeProduct.promotionRule}
+          </section>
+
+          <section className="user-detail-panel">
+            <div className="detail-image">
+              <img src={activeProduct.imageUrl} alt={activeProduct.imageAlt} />
             </div>
-            <p className="product-note">{activeProduct.notes}</p>
-            <div className="user-actions">
-              <button className="buy-action" type="button" onClick={() => addToCart()}>
-                <ShoppingBag size={18} />
-                加入购物车
-              </button>
-              <button className="ghost-action" type="button" onClick={() => askAgent("这个适合我吗？")}>
-                <MessageCircle size={18} />
-                问问 Agent
-              </button>
+            <div className="detail-info">
+              <p className="detail-eyebrow">你选择的商品 · {activeProduct.category}</p>
+              <h2>{activeProduct.name}</h2>
+              <div className="user-selling-points">
+                {activeProduct.sellingPoints.map((point) => (
+                  <span key={point}>{point}</span>
+                ))}
+              </div>
+              <div className="user-price-row">
+                <div>
+                  <span>直播价</span>
+                  <strong>¥{activeProduct.livePrice}</strong>
+                </div>
+                <div>
+                  <span>原价</span>
+                  <del>¥{activeProduct.price}</del>
+                </div>
+                <div>
+                  <span>两件预估</span>
+                  <strong>¥{estimatePrice(activeProduct, 2)}</strong>
+                </div>
+              </div>
+              <div className="promotion-strip">
+                <Sparkles size={16} />
+                {activeProduct.promotionRule}
+              </div>
+              <p className="product-note">{activeProduct.notes}</p>
+              <div className="user-actions">
+                <button className="buy-action" type="button" onClick={() => addToCart(activeProduct)}>
+                  <ShoppingBag size={18} />
+                  加入购物车
+                </button>
+                <button className="ghost-action" type="button" onClick={() => askAgent("这个适合我吗？")}>
+                  <MessageCircle size={18} />
+                  问问 Agent
+                </button>
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        </div>
 
         <aside className="user-chat-panel">
           <div className="panel-heading">
@@ -308,16 +389,12 @@ function UserApp() {
             ))}
           </div>
 
-          <div className="chat-stream">
+          <div className="chat-stream" ref={chatStreamRef}>
             {messages.slice(-8).map((message) => (
             <article key={message.id} className={`chat-message ${message.role}`}>
               <span>{message.role === "user" ? <UserRound size={15} /> : <Bot size={15} />}</span>
               <p>{message.text}</p>
-              {message.role === "agent" && message.source ? (
-                <small>{message.source === "llm" ? "DeepSeek Agent" : "本地兜底"}</small>
-              ) : message.category ? (
-                <small>{message.category}</small>
-              ) : null}
+              {message.category ? <small>{message.category}</small> : null}
             </article>
             ))}
           </div>
@@ -330,11 +407,12 @@ function UserApp() {
             }}
           >
             <input
+              aria-label="输入直播间问题"
               value={question}
               onChange={(event) => setQuestion(event.target.value)}
               placeholder="发弹幕问价格、库存、售后..."
             />
-            <button type="submit" disabled={isAsking}>
+            <button type="submit" aria-label="发送问题" disabled={isAsking}>
               <Send size={17} />
             </button>
           </form>
@@ -346,31 +424,52 @@ function UserApp() {
           <div className="section-title">
             <Package size={18} />
             <h2>本场商品</h2>
+            <span className="room-product-count">{products.length} 件</span>
+            <a className="room-image-credits" href="/products/credits.html">图片来源</a>
           </div>
           <div className="user-product-grid">
             {products.map((product) => (
-              <button
+              <div
                 key={product.id}
                 className={product.id === activeProduct.id ? "user-product-item active" : "user-product-item"}
-                type="button"
+                role="button"
+                tabIndex={0}
+                aria-pressed={product.id === activeProduct.id}
                 onClick={() => setActiveProductId(product.id)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    setActiveProductId(product.id);
+                  }
+                }}
               >
                 <img src={product.imageUrl} alt={product.imageAlt} />
+                {product.id === liveProduct.id ? <em className="teaching-badge">讲解中</em> : null}
                 <span>{product.name}</span>
                 <strong>¥{product.livePrice}</strong>
-                <ChevronRight size={15} />
-              </button>
+                <button
+                  className="card-add-btn"
+                  type="button"
+                  aria-label={`将${product.name}加入购物车`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    addToCart(product);
+                  }}
+                >
+                  <Plus size={16} />
+                </button>
+              </div>
             ))}
           </div>
         </section>
 
-        <aside className="cart-panel">
+        <aside className="cart-panel" id="shopping-cart">
           <div className="section-title">
             <ReceiptText size={18} />
             <h2>购物车</h2>
           </div>
           {cart.length === 0 ? (
-            <p className="cart-empty">购物车为空，选择商品后可模拟下单。</p>
+            <p className="cart-empty">购物车为空，添加商品后即可提交订单。</p>
           ) : (
             <div className="cart-list">
               {cart.map((item) => (
@@ -402,7 +501,7 @@ function UserApp() {
           </div>
           <button className="buy-action checkout" type="button" onClick={() => void submitOrder()} disabled={isSubmittingOrder}>
             <CheckCircle2 size={18} />
-            {isSubmittingOrder ? "提交中" : "模拟下单"}
+            {isSubmittingOrder ? "提交中" : "提交订单"}
           </button>
           {notice ? <p className="user-notice">{notice}</p> : null}
         </aside>
