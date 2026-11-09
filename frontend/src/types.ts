@@ -112,12 +112,28 @@ export interface AgentTraceItem {
   status: "已完成" | "需注意" | "风险";
 }
 
+export interface ProductSalesItem {
+  productId: number;
+  productName: string;
+  quantity: number;
+  amount: number;
+}
+
+export interface SalesSummary {
+  totalOrders: number;
+  totalQuantity: number;
+  totalAmount: number;
+  avgOrderValue: number;
+  productSales: ProductSalesItem[];
+}
+
 export interface ReviewReportData {
   highFrequencyQuestions: string[];
   emotionSummary: Record<Emotion, number>;
   blockers: string[];
   suggestions: string[];
   nextProductOrder: string[];
+  salesSummary?: SalesSummary | null;
 }
 
 export interface ScriptSection {

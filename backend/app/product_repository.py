@@ -83,7 +83,7 @@ class ProductRepository:
             session.refresh(record)
             return record_to_order(record)
 
-    def list_orders(self, limit: int = 50) -> list[Order]:
+    def list_orders(self, limit: int | None = 50) -> list[Order]:
         with self.session_factory() as session:
             records = session.scalars(select(OrderRecord).order_by(OrderRecord.created_at.desc()).limit(limit)).all()
             return [record_to_order(record) for record in records]

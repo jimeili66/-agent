@@ -1399,8 +1399,6 @@ function App() {
             <div className="insight-kpis">
               <KpiCard label="工具调用次数" value={`${toolLogs.length}`} tone="blue" />
               <KpiCard label="合规风险次数" value={`${qaLogs.filter((item) => item.category === "异常合规").length}`} tone="red" />
-              <KpiCard label="转化阻碍" value={`${review.blockers.length}`} tone="orange" />
-              <KpiCard label="复盘建议" value={`${review.suggestions.length}`} tone="green" />
             </div>
             <div className="insight-grid">
               <RankPanel title="高频问题 TOP 5" data={questionRanking} />
@@ -1408,12 +1406,22 @@ function App() {
               <ListPanel title="转化阻碍" items={review.blockers} />
               <ListPanel title="优化建议" items={review.suggestions} />
               <TimelinePanel items={review.nextProductOrder} />
+              <KpiCard label="总订单数" value={review.salesSummary ? `${review.salesSummary.totalOrders}` : "未记录"} tone="blue" />
+              <KpiCard label="卖出商品数量" value={review.salesSummary ? `${review.salesSummary.totalQuantity} 件` : "未记录"} tone="green" />
+              <KpiCard label="总成交额" value={review.salesSummary ? `¥${review.salesSummary.totalAmount}` : "未记录"} tone="orange" />
+              <KpiCard label="客单价" value={review.salesSummary ? `¥${review.salesSummary.avgOrderValue}` : "未记录"} tone="blue" />
             </div>
           </>
         ) : (
-          <EmptyState text="处理弹幕后点击“生成复盘”，这里会展示指标卡、问题排行、情绪分布、风险与下一场排品。" />
+          <EmptyState text="处理弹幕后点击“生成复盘”，这里会展示销售指标、商品销量排行、问题排行、情绪分布与下一场排品。" />
         )}
       </section>
+              <RankPanel
+                title="商品销量排行"
+                data={review.salesSummary?.productSales.length
+                  ? review.salesSummary.productSales.map((item) => [item.productName, item.quantity] as [string, number])
+                  : [[review.salesSummary ? "暂无销售数据" : "未记录完整销售数据", 0]]}
+              />
     </main>
   );
 }

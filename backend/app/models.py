@@ -147,12 +147,28 @@ class AgentTraceItem(BaseModel):
     status: Literal["已完成", "需注意", "风险"]
 
 
+class ProductSalesItem(BaseModel):
+    productId: int
+    productName: str
+    quantity: int
+    amount: int
+
+
+class SalesSummary(BaseModel):
+    totalOrders: int
+    totalQuantity: int
+    totalAmount: int
+    avgOrderValue: float
+    productSales: list[ProductSalesItem]
+
+
 class ReviewReportData(BaseModel):
     highFrequencyQuestions: list[str]
     emotionSummary: dict[Emotion, int]
     blockers: list[str]
     suggestions: list[str]
     nextProductOrder: list[str]
+    salesSummary: SalesSummary | None = None
 
 
 class ScriptSection(BaseModel):
