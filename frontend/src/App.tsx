@@ -13,9 +13,9 @@ import {
   RefreshCw,
   Search,
   ShieldCheck,
+  Square,
   TrendingUp,
   Trash2,
-  UserCircle,
   Wrench,
   Zap
 } from "lucide-react";
@@ -493,6 +493,13 @@ function App() {
     await syncCurrentScript(activeProduct, profile, "开场");
   }
 
+  function handleStopSimulation() {
+    setIsLive(false);
+    stopCamera();
+    setAgentReply("直播已结束。本场弹幕问答、工具调用与订单数据已保留，可点击「生成复盘」查看直播复盘报告。");
+    setAnalysisState("已完成");
+  }
+
   async function startCamera() {
     if (cameraStreamRef.current) {
       setCameraState("on");
@@ -858,19 +865,23 @@ function App() {
               </button>
             ))}
           </div>
-          <button className={`secondary-action ${isLive ? "active" : ""}`} type="button" onClick={handleStartSimulation}>
-            <Play size={17} />
-            {isLive ? "直播中" : "开始模拟"}
-          </button>
+          {isLive ? (
+            <button className="secondary-action active" type="button" onClick={handleStopSimulation}>
+              <Square size={17} />
+              结束直播
+            </button>
+          ) : (
+            <button className="secondary-action" type="button" onClick={handleStartSimulation}>
+              <Play size={17} />
+              开始模拟
+            </button>
+          )}
           {activePage === "review" ? (
             <button className="primary-action" type="button" onClick={handleReview}>
               <BarChart3 size={17} />
               生成复盘
             </button>
           ) : null}
-          <a className="icon-action header-link-action" href="/account" title={currentAccount ? `当前账号：${currentAccount.username}` : "进入账号端"}>
-            <UserCircle size={17} />
-          </a>
           <button className="icon-action" type="button" onClick={handleLogout} title="退出登录">
             <LogOut size={17} />
           </button>
@@ -1397,31 +1408,31 @@ function App() {
         {review ? (
           <>
             <div className="insight-kpis">
-              <KpiCard label="工具调用次数" value={`${toolLogs.length}`} tone="blue" />
-              <KpiCard label="合规风险次数" value={`${qaLogs.filter((item) => item.category === "异常合规").length}`} tone="red" />
-            </div>
-            <div className="insight-grid">
-              <RankPanel title="高频问题 TOP 5" data={questionRanking} />
-              <EmotionPanel data={emotionSummary} />
-              <ListPanel title="转化阻碍" items={review.blockers} />
-              <ListPanel title="优化建议" items={review.suggestions} />
-              <TimelinePanel items={review.nextProductOrder} />
               <KpiCard label="总订单数" value={review.salesSummary ? `${review.salesSummary.totalOrders}` : "未记录"} tone="blue" />
               <KpiCard label="卖出商品数量" value={review.salesSummary ? `${review.salesSummary.totalQuantity} 件` : "未记录"} tone="green" />
               <KpiCard label="总成交额" value={review.salesSummary ? `¥${review.salesSummary.totalAmount}` : "未记录"} tone="orange" />
               <KpiCard label="客单价" value={review.salesSummary ? `¥${review.salesSummary.avgOrderValue}` : "未记录"} tone="blue" />
+              <KpiCard label="工具调用次数" value={`${toolLogs.length}`} tone="blue" />
+              <KpiCard label="合规风险次数" value={`${qaLogs.filter((item) => item.category === "异常合规").length}`} tone="red" />
             </div>
-          </>
-        ) : (
-          <EmptyState text="处理弹幕后点击“生成复盘”，这里会展示销售指标、商品销量排行、问题排行、情绪分布与下一场排品。" />
-        )}
-      </section>
+            <div className="insight-grid">
               <RankPanel
                 title="商品销量排行"
                 data={review.salesSummary?.productSales.length
                   ? review.salesSummary.productSales.map((item) => [item.productName, item.quantity] as [string, number])
                   : [[review.salesSummary ? "暂无销售数据" : "未记录完整销售数据", 0]]}
               />
+              <RankPanel title="高频问题 TOP 5" data={questionRanking} />
+              <EmotionPanel data={emotionSummary} />
+              <ListPanel title="转化阻碍" items={review.blockers} />
+              <ListPanel title="优化建议" items={review.suggestions} />
+              <TimelinePanel items={review.nextProductOrder} />
+            </div>
+          </>
+        ) : (
+          <EmptyState text="处理弹幕后点击“生成复盘”，这里会展示销售指标、商品销量排行、问题排行、情绪分布与下一场排品。" />
+        )}
+      </section>
     </main>
   );
 }
