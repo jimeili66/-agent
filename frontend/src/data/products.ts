@@ -13,8 +13,8 @@ export const products: Product[] = [
     notes: "杯盖不可放入洗碗机",
     suitableFor: ["学生党", "通勤人群", "宝妈"],
     imageUrl: "/products/cup.jpg",
-    imageAlt: "金属保温杯产品摄影",
-    imageCredit: "Unsplash"
+    imageAlt: "手持不锈钢保温瓶示意",
+    imageCredit: "Pexels"
   },
   {
     id: 2,
@@ -28,8 +28,8 @@ export const products: Product[] = [
     notes: "孕期和特殊体质建议先咨询专业人士",
     suitableFor: ["精致白领", "学生党"],
     imageUrl: "/products/coffee.jpg",
-    imageAlt: "咖啡与冲泡器具产品摄影",
-    imageCredit: "Unsplash"
+    imageAlt: "挂耳滤袋冲泡咖啡示意",
+    imageCredit: "Pexels"
   },
   {
     id: 3,
@@ -43,8 +43,8 @@ export const products: Product[] = [
     notes: "敏感肌先做局部测试",
     suitableFor: ["学生党", "精致白领"],
     imageUrl: "/products/cleanser.jpg",
-    imageAlt: "洁面护肤品瓶身产品摄影",
-    imageCredit: "Unsplash"
+    imageAlt: "按压泵洁面瓶示意",
+    imageCredit: "Pexels"
   },
   {
     id: 4,
@@ -58,8 +58,8 @@ export const products: Product[] = [
     notes: "不建议边充边长时间使用",
     suitableFor: ["学生党", "宝妈"],
     imageUrl: "/products/lamp.jpg",
-    imageAlt: "桌面台灯产品摄影",
-    imageCredit: "Unsplash"
+    imageAlt: "可调节桌面台灯示意",
+    imageCredit: "Pexels"
   },
   {
     id: 5,
@@ -73,8 +73,8 @@ export const products: Product[] = [
     notes: "含乳制品和坚果，过敏人群留意配料",
     suitableFor: ["学生党", "精致白领", "宝妈"],
     imageUrl: "/products/oatmeal.jpg",
-    imageAlt: "早餐燕麦与水果产品摄影",
-    imageCredit: "Unsplash"
+    imageAlt: "玻璃罐装水果燕麦示意",
+    imageCredit: "Pexels"
   },
   {
     id: 6,
@@ -88,8 +88,8 @@ export const products: Product[] = [
     notes: "开封后建议 60 天内用完",
     suitableFor: ["宝妈"],
     imageUrl: "/products/wipes.jpg",
-    imageAlt: "母婴护理用品产品摄影",
-    imageCredit: "Unsplash"
+    imageAlt: "婴儿湿巾包装示意",
+    imageCredit: "Headlock0225 · CC BY 4.0"
   },
   {
     id: 7,
@@ -103,8 +103,8 @@ export const products: Product[] = [
     notes: "承重不超过 5kg",
     suitableFor: ["学生党", "精致白领"],
     imageUrl: "/products/storage.jpg",
-    imageAlt: "整洁桌面收纳产品摄影",
-    imageCredit: "Unsplash"
+    imageAlt: "多层塑料桌面抽屉盒示意",
+    imageCredit: "Fructibus · CC0"
   },
   {
     id: 8,
@@ -118,8 +118,8 @@ export const products: Product[] = [
     notes: "深色首次清洗可能轻微浮色",
     suitableFor: ["学生党", "精致白领"],
     imageUrl: "/products/towel.jpg",
-    imageAlt: "叠放毛巾产品摄影",
-    imageCredit: "Unsplash"
+    imageAlt: "折叠蓝色条纹毛巾示意",
+    imageCredit: "Pexels"
   },
   {
     id: 9,
@@ -133,8 +133,8 @@ export const products: Product[] = [
     notes: "婴幼儿衣物建议减少用量",
     suitableFor: ["宝妈", "精致白领"],
     imageUrl: "/products/laundry.jpg",
-    imageAlt: "家庭清洁用品产品摄影",
-    imageCredit: "Unsplash"
+    imageAlt: "向洗衣机添加洗涤用品的场景示意",
+    imageCredit: "Pexels"
   },
   {
     id: 10,
@@ -148,7 +148,7 @@ export const products: Product[] = [
     notes: "高音量长时间佩戴可能影响听力",
     suitableFor: ["学生党", "精致白领"],
     imageUrl: "/products/earbuds.jpg",
-    imageAlt: "蓝牙耳机产品摄影",
-    imageCredit: "Unsplash"
+    imageAlt: "无线耳机与打开的充电盒示意",
+    imageCredit: "Pexels"
   }
 ];
