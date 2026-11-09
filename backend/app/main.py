@@ -216,7 +216,11 @@ def get_orders() -> dict[str, list]:
 
 @app.post("/api/review/generate/", response_model=ReviewReportData)
 def create_review(payload: ReviewRequest) -> ReviewReportData:
-    report = generate_review(payload.qaLogs, load_products(), list_orders(limit=None))
+    orders = list_orders(limit=None)
+    if payload.sessionStartedAt:
+        # 只统计本场直播（场次起点之后）的订单
+        orders = [order for order in orders if order.createdAt >= payload.sessionStartedAt]
+    report = generate_review(payload.qaLogs, load_products(), orders)
     return save_review_report(report)
 
 
