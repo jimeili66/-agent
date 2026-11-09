@@ -67,14 +67,10 @@ function AccountApp() {
             <Radio size={24} />
           </span>
           <div>
-            <strong>账号端</strong>
-            <p>管理后台账号与密码维护</p>
+            <h1>账号管理</h1>
+            <p>创建运营账号、调整密码与查看现有角色。</p>
           </div>
         </div>
-        <nav>
-          <a href="/admin/dashboard">返回管理端</a>
-          <a href="/user">用户端</a>
-        </nav>
       </header>
 
       <section className="account-grid">

@@ -6,6 +6,7 @@ import LoginApp from "./LoginApp";
 import UserApp from "./UserApp";
 import { AUTH_TOKEN_KEY } from "./api";
 import "./styles.css";
+import "./studio.css";
 
 const isAdminRoute = window.location.pathname.startsWith("/admin");
 const isLoginRoute = window.location.pathname === "/admin/login";
