@@ -120,7 +120,7 @@ copy .env.example .env
 DATABASE_URL=mysql+pymysql://root:你的MySQL密码@127.0.0.1:3306/live_agent?charset=utf8mb4
 DEEPSEEK_API_KEY=你的DeepSeekKey
 DEEPSEEK_BASE_URL=https://api.deepseek.com
-DEEPSEEK_MODEL=deepseek-chat
+DEEPSEEK_MODEL=deepseek-flash
 ```
 
 注意：`.env` 包含本机密码和 API Key，已经被 `.gitignore` 忽略，不要上传到 GitHub。

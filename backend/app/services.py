@@ -1,6 +1,7 @@
 from collections import Counter
 from datetime import datetime
 import json
+import logging
 import os
 from uuid import uuid4
 
@@ -25,6 +26,9 @@ from .models import (
     ToolLog,
     UserProfile,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 def now_time() -> str:
@@ -235,7 +239,11 @@ def _has_llm_key() -> bool:
 def _request_llm_json(system_prompt: str, prompt: dict, schema_name: str, schema: dict) -> dict | None:
     deepseek_key = os.getenv("DEEPSEEK_API_KEY")
     if deepseek_key:
-        return _request_deepseek_json(deepseek_key, system_prompt, prompt)
+        return _request_deepseek_json(
+            deepseek_key,
+            system_prompt,
+            {**prompt, "outputSchema": schema},
+        )
 
     openai_key = os.getenv("OPENAI_API_KEY")
     if openai_key:
@@ -245,21 +253,40 @@ def _request_llm_json(system_prompt: str, prompt: dict, schema_name: str, schema
 
 
 def _request_deepseek_json(api_key: str, system_prompt: str, prompt: dict) -> dict | None:
-    response = httpx.post(
-        f"{os.getenv('DEEPSEEK_BASE_URL', 'https://api.deepseek.com').rstrip('/')}/chat/completions",
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        json={
-            "model": os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
-            "messages": [
-                {"role": "system", "content": f"{system_prompt}\n只输出合法 JSON，不要输出 Markdown。"},
-                {"role": "user", "content": json.dumps(prompt, ensure_ascii=False)},
-            ],
-            "response_format": {"type": "json_object"},
-            "max_tokens": 1200,
-        },
-        timeout=30,
-    )
-    response.raise_for_status()
+    url = f"{os.getenv('DEEPSEEK_BASE_URL', 'https://api.deepseek.com').rstrip('/')}/chat/completions"
+    model = os.getenv("DEEPSEEK_MODEL") or "deepseek-flash"
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": f"{system_prompt}\n按 outputSchema 输出 JSON 对象，使用 properties 指定的字段名。只返回数据，不要复制 schema 或使用 Markdown。"},
+            {"role": "user", "content": json.dumps(prompt, ensure_ascii=False)},
+        ],
+        "response_format": {"type": "json_object"},
+        "max_tokens": 1200,
+    }
+    if model in {"deepseek-flash", "deepseek-v4-pro"}:
+        payload["thinking"] = {"type": "disabled"}
+
+    # Retry only failures before sending the request, to avoid duplicate generation.
+    for attempt in range(3):
+        try:
+            response = httpx.post(
+                url,
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json=payload,
+                timeout=httpx.Timeout(30, connect=6),
+            )
+            break
+        except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
+            if attempt == 2:
+                logger.warning("DeepSeek connection failed after three attempts (%s)", type(exc).__name__)
+                raise
+
+    try:
+        response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        logger.warning("DeepSeek rejected the request (HTTP %s)", exc.response.status_code)
+        raise
     content = response.json().get("choices", [{}])[0].get("message", {}).get("content", "")
     if not content:
         return None
@@ -307,6 +334,7 @@ def _generate_script_with_openai(product: Product, profile: UserProfile, script_
         "product": product.model_dump(),
         "profile": profile,
         "scriptType": script_type,
+        "outputFormat": {"script": "可直接口播的中文话术"},
         "requirements": [
             "必须围绕当前商品资料生成，不要套用固定模板。",
             "结合用户画像调整语气：学生党更轻快实用，宝妈更安心细致，精致白领更高效克制。",
