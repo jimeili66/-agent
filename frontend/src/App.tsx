@@ -440,7 +440,7 @@ function App() {
       return;
     }
     if (source === "fallback") {
-      setApiNotice("未检测到可用 DeepSeek API Key，当前使用本地兜底话术；配置 Key 后会自动切换为 DeepSeek 生成。");
+      setApiNotice("DeepSeek 暂时无法生成话术，当前使用本地备用话术。");
     }
   }
 

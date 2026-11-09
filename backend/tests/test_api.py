@@ -3,6 +3,7 @@ import os
 from typing import get_args
 
 from fastapi.testclient import TestClient
+from httpx import ConnectError
 import pytest
 
 os.environ.setdefault("DATABASE_URL", "")
@@ -339,9 +340,12 @@ def test_script_generation_uses_deepseek_chat_completions_when_configured(monkey
 
     def fake_post(url, **kwargs):
         calls.append((url, kwargs))
+        if len(calls) == 1:
+            raise ConnectError("transient TLS failure")
         return FakeResponse()
 
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+    monkeypatch.delenv("DEEPSEEK_MODEL", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setattr("backend.app.services.httpx.post", fake_post)
 
@@ -352,9 +356,10 @@ def test_script_generation_uses_deepseek_chat_completions_when_configured(monkey
 
     assert response.status_code == 200
     assert response.json() == {"script": "DeepSeek 已结合商品、画像和优惠规则生成主播话术。", "source": "llm"}
-    assert calls
+    assert len(calls) == 2
     assert calls[0][0] == "https://api.deepseek.com/chat/completions"
-    assert calls[0][1]["json"]["model"] == "deepseek-chat"
+    assert calls[0][1]["json"]["model"] == "deepseek-flash"
+    assert calls[0][1]["json"]["thinking"] == {"type": "disabled"}
     assert calls[0][1]["json"]["response_format"] == {"type": "json_object"}
 
 
@@ -414,6 +419,7 @@ def test_script_sections_endpoint_uses_deepseek_when_configured(monkeypatch):
         return FakeResponse()
 
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+    monkeypatch.delenv("DEEPSEEK_MODEL", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setattr("backend.app.services.httpx.post", fake_post)
 
@@ -427,7 +433,7 @@ def test_script_sections_endpoint_uses_deepseek_when_configured(monkeypatch):
     assert data["source"] == "llm"
     assert [item["title"] for item in data["sections"]] == titles
     assert "DeepSeek" in data["sections"][0]["value"]
-    assert calls[0][1]["json"]["model"] == "deepseek-chat"
+    assert calls[0][1]["json"]["model"] == "deepseek-flash"
     assert "开场引导" in calls[0][1]["json"]["messages"][1]["content"]
 
 
